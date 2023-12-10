@@ -9,7 +9,7 @@ import (
   "strconv"
 )
 
-func CardVals(char rune)int {
+func CardVals(char rune, wildcard bool)int {
   switch char {
   case 'A':
     return 14
@@ -18,7 +18,11 @@ func CardVals(char rune)int {
   case 'Q':
     return 12
   case 'J':
-    return  11
+    if wildcard {
+      return 1
+    } else {
+      return  11
+    }
   case 'T':
     return 10
   case '9':
@@ -82,15 +86,15 @@ type Hand struct {
   Bid int
 }
 
-func (h Hand) Gt(oh Hand) bool {
+func (h Hand) Gt(oh Hand, wildcard bool) bool {
   if h.Strength > oh.Strength {
     return true
   } else if h.Strength < oh.Strength {
     return false
   } else {
     for i, val := range(h.Cards) {
-      card1 := CardVals(val)
-      card2 := CardVals([]rune(oh.Cards)[i]) 
+      card1 := CardVals(val, wildcard)
+      card2 := CardVals([]rune(oh.Cards)[i], wildcard)
       if card1 > card2 {
         return true
       } else if card1 < card2 {
@@ -102,15 +106,15 @@ func (h Hand) Gt(oh Hand) bool {
   return false
 }
 
-func (h Hand) Lt(oh Hand) bool {
+func (h Hand) Lt(oh Hand, wildcard bool) bool {
   if h.Strength < oh.Strength {
     return true
   } else if h.Strength > oh.Strength {
     return false
   } else {
     for i, val := range(h.Cards) {
-      card1 := CardVals(val)
-      card2 := CardVals([]rune(oh.Cards)[i]) 
+      card1 := CardVals(val, wildcard)
+      card2 := CardVals([]rune(oh.Cards)[i], wildcard)
       if card1 < card2 {
         return true
       } else if card1 > card2 {
@@ -183,7 +187,50 @@ func (h *Hand) CalcStrength() {
   h.Strength = strength
 }
 
-func MakeHand(s string) Hand {
+func (h *Hand) CalcStrengthWildcard() {
+  h.CalcStrength()
+
+  if h.Strength == 6 { // five of a kind can't get better
+    return
+  }
+
+  jokers := strings.Count(h.Cards, "J")
+
+  switch h.Strength {
+  case 5:
+    if jokers > 0 {
+      h.Strength = h.Strength + 1
+    }
+  case 4:
+    if jokers > 0 {
+      h.Strength = 6
+    }
+  case 3:
+    if jokers > 0 {
+      if jokers == 3 {
+        h.Strength = 5
+      } else {
+        h.Strength = h.Strength + jokers + 1
+      }
+    }
+  case 2:
+    if jokers == 2 {
+      h.Strength = 5
+    } else if jokers == 1 {
+      h.Strength = 4
+    }
+  case 1:
+    if jokers > 0 {
+      h.Strength = 3
+    }
+  default:
+    if jokers > 0 {
+      h.Strength = 1
+    }
+  }
+}
+
+func MakeHand(s string, wildcard bool) Hand {
   attrs := strings.Split(s, " ")
   bid, err := strconv.Atoi(attrs[1])
 
@@ -193,19 +240,23 @@ func MakeHand(s string) Hand {
 
   hand := Hand{Cards: attrs[0], Bid: bid}
 
-  hand.CalcStrength()
+  if wildcard {
+    hand.CalcStrengthWildcard()
+  } else {
+    hand.CalcStrength()
+  }
 
   return hand
 }
 
-func MakeHands(file *os.File) []Hand {
+func MakeHands(file *os.File, wildcard bool) []Hand {
   scanner := bufio.NewScanner(file)
   scanner.Split(bufio.ScanLines)
 
   var hands []Hand
 
   for scanner.Scan() {
-    h := MakeHand(scanner.Text())
+    h := MakeHand(scanner.Text(), wildcard)
     hands = append(hands, h)
   }
 
@@ -222,21 +273,21 @@ func OpenFile(filename string) *os.File {
   return file
 }
 
-func mergeSort(items []Hand) []Hand {
+func mergeSort(items []Hand, wildcard bool) []Hand {
     if len(items) < 2 {
         return items
     }
-    first := mergeSort(items[:len(items)/2])
-    second := mergeSort(items[len(items)/2:])
-    return merge(first, second)
+    first := mergeSort(items[:len(items)/2], wildcard)
+    second := mergeSort(items[len(items)/2:], wildcard)
+    return merge(first, second, wildcard)
 }
 
-func merge(a []Hand, b []Hand) []Hand {
+func merge(a []Hand, b []Hand, wildcard bool) []Hand {
     final := []Hand{}
     i := 0
     j := 0
     for i < len(a) && j < len(b) {
-        if a[i].Lt(b[j]) {
+        if a[i].Lt(b[j], wildcard) {
             final = append(final, a[i])
             i++
         } else {
@@ -258,27 +309,40 @@ func merge(a []Hand, b []Hand) []Hand {
 
 
 
-func SortHandsByStrength(hands []Hand) []Hand {
-  return mergeSort(hands)
+func SortHandsByStrength(hands []Hand, wildcard bool) []Hand {
+  return mergeSort(hands, wildcard)
 }
 
 func part1() {
   file := OpenFile("input.txt")
-  hands := MakeHands(file)
-  hands = SortHandsByStrength(hands)
+  hands := MakeHands(file, false)
+  hands = SortHandsByStrength(hands, false)
 
   sum := 0
 
   for i, hand := range(hands) {
-    fmt.Println("cards:", hand.Cards)
-    fmt.Println("strength:", hand.Strength)
-    fmt.Println("bid:", hand.Bid)
     sum += hand.Bid * (i + 1)
   }
 
   fmt.Println("Part 1:", sum)
 }
 
+func part2() {
+  file := OpenFile("input.txt")
+  hands := MakeHands(file, true)
+  hands = SortHandsByStrength(hands, true)
+
+  sum := 0
+
+  for i, hand := range(hands) {
+    sum += hand.Bid * (i + 1)
+  }
+
+  fmt.Println("Part 1:", sum)
+
+}
+
 func main() {
   part1()
+  part2()
 }
