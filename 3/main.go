@@ -6,6 +6,7 @@ import (
   "regexp"
   "strconv"
   "strings"
+  "time"
 )
 
 var Numbers = regexp.MustCompile(`\d+`)
@@ -73,6 +74,7 @@ func PartNumbersWithAdjacentSymbols(lines *[]string, lineNum int, indicesList []
 }
 
 func part1() {
+  startTime := time.Now()
   content, err := os.ReadFile("input.txt")
 
   if err != nil {
@@ -94,6 +96,7 @@ func part1() {
   }
 
   fmt.Println("Sum of part numbers: ", sum)
+  fmt.Println("Took:", time.Since(startTime))
 }
 
 // Part 2
@@ -112,7 +115,6 @@ func GearRatiosSameLine(line string) int {
 
   if LineMultiplication.MatchString(line) {
     matches := LineMultiplication.FindAllStringSubmatch(line, -1)
-    fmt.Println("matches", matches)
 
     for _, match := range(matches) {
       val1, err := strconv.Atoi(match[1])
@@ -137,21 +139,21 @@ func GearRatiosSameLine(line string) int {
 func NumberOverlapsIndex(numStart int, numEnd int, gearIndex int) bool {
   return numEnd == gearIndex || // left
   numStart == gearIndex + 1 || // right
-  (gearIndex > numStart && gearIndex <= numEnd) // overlaps on another line
+  (gearIndex >= numStart && gearIndex <= numEnd) // overlaps on another line
 }
 
 func FindAdjacentNumbersByLine(line string, gearIndex int) []int {
-  nums = make([]int, 0, 2) // can only ever be two adjacent nums per line
-  matches := Numbers.FindAllStringIndex(line)
+  nums := make([]int, 0, 2) // can only ever be two adjacent nums per line
+  matches := Numbers.FindAllStringIndex(line, -1)
   
   for _, match := range(matches) {
-    if NumberOverlapsIndex(match[0], match[1]) {
+    if NumberOverlapsIndex(match[0], match[1], gearIndex) {
       num, err := strconv.Atoi(line[match[0]:match[1]])
       if err != nil {
         panic("problem converting string in FindAdjacentNumbersByLine")
       }
 
-      append(nums, num)
+      nums = append(nums, num)
     }
   }
 
@@ -160,46 +162,41 @@ func FindAdjacentNumbersByLine(line string, gearIndex int) []int {
 
 func AdjacentNumbersToGear(lines *[]string, lineNum int, gearIndex int) []int {
   nums := make([]int, 0, 6)
+
   if lineNum > 0 {
+    nums = append(nums, FindAdjacentNumbersByLine((*lines)[lineNum - 1], gearIndex)...)
   }
 
-  current := Numbers.FindAllStringMatchIndex((*lines)[lineNum])
+  nums = append(nums, FindAdjacentNumbersByLine((*lines)[lineNum], gearIndex)...)
 
   if lineNum < len((*lines)) - 1 {
-    lower := Numbers.FindAllStringMatchIndex((*lines)[lineNum + 1])
+    nums = append(nums, FindAdjacentNumbersByLine((*lines)[lineNum + 1], gearIndex)...)
   }
+
+  return nums
 }
 
-func PartNumbersWithAdjacentGears(lines *[]string, lineNum int, indices [][]int) int {
-  gearRatios := 0
+func CalcGearRatios(lines *[]string, lineNum int, indices [][]int) int {
+  gearRatio := 0
+  nums := []int{}
 
-  // loop through the gears on a line
-  for _, i := range(indices) {
-    // search for numbers touching the gear
-    nums := AdjacentNumbersToGear(lines, lineNum, i)
+  for _, x := range(indices) {
+    nums = AdjacentNumbersToGear(lines, lineNum, x[0])
+
+    if len(nums) > 1 {
+      for i, first := range(nums) {
+        for _, second := range(nums[i + 1:]) {
+          gearRatio += first * second
+        }
+      }
+    }
   }
 
-  // Locate a gear
-  // Find numbers which are "touching" the gear
-    // Upper
-    // Lower
-    // Same line
-  // find the product of all the combinations of the numbers touching the gear
-
-  // // check the current line
-  // gearRatios += GearRatiosSameLine((*lines)[lineNum])
-
-
-  // // check the current line and above line
-  // if lineNum != 0 {
-  //   GearRatiosSplitLines()
-  // }
-
-  return gearRatios
+  return gearRatio
 }
 
 func part2() {
-
+  startTime := time.Now()
   lines := strings.Split(ParseFile("input.txt"), "\n")
 
   // Drop empty last line
@@ -210,16 +207,16 @@ func part2() {
   for lineNum, line := range(lines) {
     // find all gears
     indices := Gear.FindAllStringSubmatchIndex(line, -1)
-    // fmt.Println("gear indices:",indices, lineNum )
     if len(indices) != 0 {
-      sum += PartNumbersWithAdjacentGears(&lines, lineNum, indices)
+      sum += CalcGearRatios(&lines, lineNum, indices)
     }
   }
 
   fmt.Println("Sum of gear numbers: ", sum)
+  fmt.Println("Took:", time.Since(startTime))
 }
 
 func main() {
-  // part1()
+  part1()
   part2()
 }
